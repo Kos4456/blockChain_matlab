@@ -23,13 +23,13 @@ classdef Wallet
             Modulus =  getModulus(this.privateKey);
             Exponent =  getExponent(this.privateKey);
             signature = join(num2str(Encrypt(Modulus,Exponent,char(transaction.hash))),' ');
-            global mainChain;
-            mainChain.addBlock(transaction,this.publicKey,signature)
+            global mainNetwork;
+            mainNetwork.distributeTransaction(transaction,this.publicKey,signature)
         end
         
         function balance = get.balance(this)
-            global mainChain;
-            balance = mainChain.checkBalance(this.publicKey);
+            global mainNetwork;
+            balance = mainNetwork.network(2).checkBalance(this.publicKey); %very bad x)
         end
     end
 

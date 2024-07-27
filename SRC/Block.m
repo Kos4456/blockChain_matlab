@@ -9,7 +9,7 @@ end
 
 methods
     function obj = Block(prevHash,transaction)
-        obj.nonce = round(1e9*rand());
+        obj.nonce = 1+round(1*rand());
         obj.prevHash = prevHash;
         obj.transaction = transaction;
         obj.ts = datetime('now');
