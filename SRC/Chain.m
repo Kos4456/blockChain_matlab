@@ -2,12 +2,22 @@ classdef Chain
 properties
     chain(:,1) Block
     id(1,1) int32 %temporary, to keep track of thing
+    blockValidated(1,1) double %To communicate with network
+    isMining(1,1) double
+end
+properties(Access=private)
+    blockToMine(1,1) Block
 end
 
 methods
     function obj = Chain(initialAmount,firstWallet,id)
         obj.chain = [Block("", Transaction(initialAmount,'genesis',firstWallet.publicKey))];
         obj.id = id;
+
+        %private properties linked to iterative modeling of user behavior
+        % obj.isMining = false;
+        % obj.blockToMine = Block("", Transaction(initialAmount,'genesis',firstWallet.publicKey));%Bloc not relevant, just need to be one
+        % obj.blockValidated=false;
     end
     
     function lastBlock = getLastBlock(this)
@@ -25,39 +35,31 @@ methods
         %outside of any transaction (and transaction need existence of
         %publicKey..) => maybe in the block?
         if isValid&&this.checkBalance(payerPublicKey)>=transaction.amount
-            newBlock = Block(this.getLastBlock.hash,transaction); %not representative: block is recreated each time but that is not relevant
+            this.blockValidated=false;
+            this.isMining=true;
+            this.blockToMine = Block(this.getLastBlock.hash,transaction); %not representative: block is recreated each time but that is not relevant
             %HERE mining should go: so far just signature has been set, and
             %nobody is forced to use it (you can modify code isValid=True
             %to send any blocs to the chain)
-            if this.mine(newBlock)
-                this.chain(end+1) = newBlock;
-            end
         end
 
     end
-%   mine(nonce: number) {
-%     let solution = 1;
-%     console.log('mining...')
-% 
-%     while(true) {
-%       const hash = crypto.createHash('MD5');
-%       hash.update((nonce + solution).toString()).end();
-% 
-%       const attempt = hash.digest('hex');
-% 
-%       if(attempt.substr(0,4)==='0000'){
-%         console.log(`Solved: ${solution}`);
-%         return solution;
-%       }
-% 
-%       solution +=1;
-%     }
-    function validated = mine(this,block)%primitive mining function
-        validated=false;
-        blockHash_bin = hex2bin(char(block.hash));
+    
+    function this = computeStep(this,t)
+        if this.isMining
+            this = this.mine(t);
+        end
+    end
+
+    function this = mine(this,t)%primitive mining function
+        this.blockValidated=false;
+        currentTestedBock = this.blockToMine;
+        currentTestedBock.nonce = currentTestedBock.nonce+t;
+        blockHash_bin = hex2bin(char(currentTestedBock.hash));
         if strcmp(blockHash_bin(1:3),'000') %HERE: complexity param
-            fprintf("chain %i validated block %s...\n",this.id,block.hash)
-            validated=true;
+            fprintf("chain %i validated block %s...\n",this.id,currentTestedBock.hash)
+            this.blockValidated=true;
+            this.chain(end+1) = currentTestedBock;
         end
     end
 
@@ -88,6 +90,11 @@ methods
         end
         isTransLegit = (balance>=amount)*doesWalletExist;
     end
+
+    function verifyChain(newChain)
+
+
+    end
     end
 end
 
@@ -113,11 +120,33 @@ end
 % avoir des fork mais on considère que tout doit être settle en 10mn. Du
 % coup c'est les mineurs de la chaîne gagnante qui sont récompensés (je
 % pense) EN FAIT NON
-
+%https://bitcoin.stackexchange.com/questions/95504/do-miners-validate-each-others-blocks
+%"only blocks that end up being a part of the best chain get paid out"
+% https://developer.bitcoin.org/devguide/block_chain.html
+% "The UTXO of a coinbase transaction has the special condition 
+% that it cannot be spent (used as an input) for at least 100 blocks. 
+% This temporarily prevents a miner from spending the transaction fees 
+% and block reward from a block that may later be determined to be stale 
+% (and therefore the coinbase transaction destroyed) after a block chain
+% fork."
+%https://learnmeabitcoin.com/technical/mining/coinbase-transaction/#coinbase-maturity
+%Comment on s'assure que le mineur ne fasse pas ceci: 
+%1) miner n'importe quel bloc, réussir une fois
+%2) continuer la chaîne pendant 100 blocs sans se soucier de partir en
+%branche
+%3) toucher la récompense
+%=> en fait la règle des 100blocs c'est une règle network, donc après
+%100blocs il faudra l'inscrire comme une transaction classique un moment
+%pour la dépenser => le réseau verra que les règles n'ont pas été
+%respectées et le refusera.
 
 %Ce n'est plus tout à fait la chaine la plus longue mais la plus grande
 %quantité de travail
 
+% Le miner choisi les transactions en fonction des fees, mais du coup il
+% peux y avoir des transactions justes mais fausses quand on regarde la
+% database parce qu'elles dépendent d'une auter transaction non prise en
+% compte => c'est au mineur de trouver un bloc qui marche
 
 
 % class Chain {

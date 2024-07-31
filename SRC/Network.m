@@ -5,6 +5,7 @@ classdef Network < handle%represent all the chains in the network
     % could add fraudulent chain/user here to model their impact
     properties
         network(:,1) Chain
+        t(1,1) double %keep track of timeline
     end
     methods 
         function obj = Network(N,initialAmount,firstWallet,varargin) %N number of chain in network
@@ -17,16 +18,26 @@ classdef Network < handle%represent all the chains in the network
         end
         
         function distributeTransaction(this,transaction,senderPublicKey,signature)
-            %ici par représentatif mais: on attends que le bloc soit validé
-            %sur chaque chaîne, et on sort le classement de qui l'a validé
-            %en premier
-            initialChainLength = min(cellfun(@length ,{this.network(:).chain}));%arbitraire mais ok tant que les run de blocks sont sync
-            %et on sort le classement
-            while any(cellfun(@length ,{this.network(:).chain})~=initialChainLength+1)%tant que le bloc n'a pas été validé sur toutes les chaînes
-                idxChainNotFinished = find(cellfun(@length ,{this.network(:).chain})==initialChainLength);
-                this.network(idxChainNotFinished) = arrayfun(@(localChain) localChain.addBlock(transaction,senderPublicKey,signature),...
-                    this.network(idxChainNotFinished));
+            this.network = arrayfun(@(localChain) localChain.addBlock(transaction,senderPublicKey,signature),this.network);
+        end
+
+        function computeStep(this)
+            for k=1:length(this.network)
+                this.network(k) = this.network(k).computeStep(this.t);
+                if this.network(k).blockValidated
+                    this.network(k).isMining = false;
+                    idxChainConnected = setdiff(1:length(this.network),k);%to be replace with a rndom properties
+                    for n=idxChainConnected%pas très beau, dans le future on peux modéliser des fork en ne modifiant pas toutes les chaînes
+                        this.network(n).chain=this.network(k).chain;
+                        this.network(n).isMining = false;%here: choice of behavior, reset when another one has mined the block
+                    end
+                    this.network(k).blockValidated=false;
+                    fprintf(['Chains ' repmat('%i ',1,length(idxChainConnected)) 'copied %i...\n'],idxChainConnected,k);
+                    break
+                end
             end
+            % this.network = arrayfun(@(localChain) localChain.computeStep(this.t),this.network);
+            this.t = this.t+1;
         end
     end
 

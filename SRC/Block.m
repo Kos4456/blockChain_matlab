@@ -9,10 +9,12 @@ end
 
 methods
     function obj = Block(prevHash,transaction)
-        obj.nonce = 1+round(1*rand());
-        obj.prevHash = prevHash;
-        obj.transaction = transaction;
-        obj.ts = datetime('now');
+        if nargin>1
+            obj.nonce = 1+round(1*rand());
+            obj.prevHash = prevHash;
+            obj.transaction = transaction;
+            obj.ts = datetime('now');
+        end
     end
 
     function hash = get.hash(this)
