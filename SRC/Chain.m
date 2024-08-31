@@ -1,9 +1,10 @@
-classdef Chain
+classdef Chain < handle %"honest chain"
 properties
     chain(:,1) Block
     id(1,1) int32 %temporary, to keep track of thing
     blockValidated(1,1) double %To communicate with network
     isMining(1,1) double
+    blockSize(1,1) int32 = 100
 end
 properties(Access=private)
     blockToMine(1,1) Block
@@ -13,7 +14,6 @@ methods
     function obj = Chain(initialAmount,firstWallet,id)
         obj.chain = [Block("", Transaction(initialAmount,'genesis',firstWallet.publicKey))];
         obj.id = id;
-
         %private properties linked to iterative modeling of user behavior
         % obj.isMining = false;
         % obj.blockToMine = Block("", Transaction(initialAmount,'genesis',firstWallet.publicKey));%Bloc not relevant, just need to be one
@@ -24,27 +24,39 @@ methods
         lastBlock = this.chain(end);
     end
 
-    function this = addBlock(this,transaction,payerPublicKey,signature)
-        Modulus =  getModulus(payerPublicKey);
-        publicExponent =  getExponent(payerPublicKey);
-        decryptedHash = char(Decrypt(Modulus, publicExponent, str2double(split(signature))'));
-        isValid = strcmp(transaction.hash,decryptedHash);
-        %&&this.checkExistencePk(payerPublicKey)&&this.checkExistencePk(transaction.payeePublicKey)
-        %abandoned so far the checkExistence=> not very enlighting/useful here and
-        %question about how to record a new publicKey in the blockChain
-        %outside of any transaction (and transaction need existence of
-        %publicKey..) => maybe in the block?
-        if isValid&&this.checkBalance(payerPublicKey)>=transaction.amount
-            this.blockValidated=false;
+    function recieveTransaction(this,transaction,payerPublicKey,signature)
+        if this.checkSignature(transaction,payerPublicKey,signature)
+            newBlock = Block(this.getLastBlock.hash,[this.blockToMine.transaction; transaction]);
+            if this.checkChainCoherence([this.chain; newBlock])
+                this.blockToMine = newBlock;
+            end
+        end 
+        if length(this.blockToMine.transaction)>=this.blockSize
             this.isMining=true;
-            this.blockToMine = Block(this.getLastBlock.hash,transaction); %not representative: block is recreated each time but that is not relevant
-            %HERE mining should go: so far just signature has been set, and
-            %nobody is forced to use it (you can modify code isValid=True
-            %to send any blocs to the chain)
         end
-
     end
-    
+
+    % function this = addBlock(this,transaction,payerPublicKey,signature)
+    %     if ~this.isMining
+    % 
+    %         %&&this.checkExistencePk(payerPublicKey)&&this.checkExistencePk(transaction.payeePublicKey)
+    %         %abandoned so far the checkExistence=> not very enlighting/useful here and
+    %         %question about how to record a new publicKey in the blockChain
+    %         %outside of any transaction (and transaction need existence of
+    %         %publicKey..) => maybe in the block?
+    %         if isValid&&this.checkBalance(this.chain,payerPublicKey)>=transaction.amount
+    %             this.blockValidated=false;
+    %             this.isMining=true;
+    %             this.blockToMine = Block(this.getLastBlock.hash,transaction); %not representative: block is recreated each time but that is not relevant
+    %             %HERE mining should go: so far just signature has been set, and
+    %             %nobody is forced to use it (you can modify code isValid=True
+    %             %to send any blocs to the chain)
+    %         end
+    % 
+    %     end
+    % 
+    % end
+
     function this = computeStep(this,t)
         if this.isMining
             this = this.mine(t);
@@ -55,9 +67,18 @@ methods
         this.blockValidated=false;
         currentTestedBock = this.blockToMine;
         currentTestedBock.nonce = currentTestedBock.nonce+t;
-        blockHash_bin = hex2bin(char(currentTestedBock.hash));
-        if strcmp(blockHash_bin(1:3),'000') %HERE: complexity param
-            fprintf("chain %i validated block %s...\n",this.id,currentTestedBock.hash)
+        %% simplified mining (hash takes too long)
+        % if t+round(100*rand())==currentTestedBock.nonce
+        %     % fprintf("chain %i validated block %s...\n",this.id,currentTestedBockHash)
+        %     fprintf("chain %i validated the block...\n",this.id)
+        %     this.blockValidated=true;
+        %     this.chain(end+1) = currentTestedBock;
+        % end
+        %% using real hash mining
+        currentTestedBockHash = currentTestedBock.hash;
+        blockHash_bin = hex2bin(char(currentTestedBockHash));
+        if strcmp(blockHash_bin(1),'0') %HERE: complexity param
+            fprintf("chain %i validated block %s...\n",this.id,currentTestedBockHash)
             this.blockValidated=true;
             this.chain(end+1) = currentTestedBock;
         end
@@ -69,11 +90,7 @@ methods
         publicKeyExist = ismember(Pk,publicKeyList);
     end
 
-    function balance = checkBalance(this,Pk)
-        transactions =[this.chain(:).transaction];
-        balance = sum([transactions.amount].*(Pk==[transactions.payeePublicKey]))-...
-            sum([transactions.amount].*(Pk==[transactions.payerPublicKey]));
-    end
+
 
     function isTransLegit = checkExistenceAndBalance(this,publicKey,amount)
         doesWalletExist=false;
@@ -91,11 +108,53 @@ methods
         isTransLegit = (balance>=amount)*doesWalletExist;
     end
 
-    function verifyChain(newChain)
+    function recieveNewBlock(this,newChain)
+        %rule check + consensus rule
+        if this.checkChainCoherence(newChain) && this.checkProofOfWork(newChain)
+            this.chain = newChain;
+            this.isMining = false;%here: choice of behavior, reset when another one has mined the block
+        else
+            fprintf('Chain %i refused the new block..',this.id)
+        end
+
+
 
 
     end
+
+
+
+    function resetChain(this)
+        this.isMining = false;
+        this.blockValidated=false;
+        this.blockToMine=Block();
     end
+end
+    methods (Static)
+    function balance = checkBalance(newChain,Pk)
+        transactions =vertcat(newChain(:).transaction);
+        balance = sum([transactions.amount].*(Pk==[transactions.payeePublicKey]))-...
+            sum([transactions.amount].*(Pk==[transactions.payerPublicKey]));
+    end
+    function isValid = checkSignature(transaction,payerPublicKey,signature)
+        Modulus =  getModulus(payerPublicKey);
+        publicExponent =  getExponent(payerPublicKey);
+        decryptedHash = char(Decrypt(Modulus, publicExponent, str2double(split(signature))'));
+        isValid = strcmp(transaction.hash,decryptedHash);
+    end
+    function isOk=checkProofOfWork(newChain)
+            blockHash_bin = hex2bin(char(newChain(end).hash));
+            isOk = strcmp(blockHash_bin(1),'0');
+    end
+    function isOk = checkChainCoherence(newChain)
+        isOk=true;
+        transactions =vertcat(newChain(:).transaction);
+        publicKeyList = setdiff(unique([transactions.payerPublicKey transactions.payeePublicKey]),"genesis");
+        for k=1:length(publicKeyList)
+            isOk = isOk&&Chain.checkBalance(newChain,publicKeyList(k))>=0;
+        end
+    end
+end
 end
 
 

@@ -1,7 +1,7 @@
 %initiate global chain
 clear all
 Satoshi = Wallet(); %First wallet flag to not record a transaction on a chain that do not exist yet.
-Network(100,100,Satoshi); 
+Network(100,100,1000,Satoshi); 
 
 global mainNetwork;
 
@@ -16,26 +16,28 @@ Bob.balance
 % Bob.sendMoney(30,Alice.publicKey)%here problem for incorrect bloc
 % Alice.sendMoney(5,Bob.publicKey)
 
-nStep=100;
+nStep=1000;
 for k=1:nStep
-
-    if k==10
-        %event
-        Satoshi.sendMoney(50,Alice.publicKey)
-    end
-
-    if k==20
-        %event
-        Satoshi.sendMoney(30,Bob.publicKey)
-    end
-
-    if k==30
-        %event
-        Bob.sendMoney(40,Alice.publicKey)
-    end
+    mainNetwork.randomLegalTransaction()
+    % if k==10
+    %     %event
+    %     Satoshi.sendMoney(50,Alice.publicKey)
+    % end
+    % 
+    % if k==20
+    %     %event
+    %     Satoshi.sendMoney(30,Bob.publicKey)
+    % end
+    % 
+    % if k==30
+    %     %event
+    %     Bob.sendMoney(40,Alice.publicKey)
+    % end
 
     mainNetwork.computeStep()
 end
+
+mainNetwork.getAllMoney()
 
 
 

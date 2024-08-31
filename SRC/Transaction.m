@@ -27,7 +27,12 @@ classdef Transaction
         end
 
         function hash = get.hash(this)
-            hash = string(sha256(char(toString(this))));
+            % if strcmp(this.hash,"")
+            %     hash = string(sha256(char(toString(this))));
+            % else
+            %     hash = this.hash;
+            % end
+            hash = string(DataHash(char(toString(this)), 'HEX','SHA-256'));
         end
 
     end
